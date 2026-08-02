@@ -1,0 +1,29 @@
+# Build outputs
+bin/
+obj/
+
+# Visual Studio / Rider / user-specific files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.rsuser
+*.sln.docstates
+
+# .NET test and publish artifacts
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+publish/
+
+# IDE and OS noise
+.idea/
+Thumbs.db
+Desktop.ini
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
