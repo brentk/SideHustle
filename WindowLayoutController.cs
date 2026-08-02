@@ -4,7 +4,9 @@ using System.Text;
 
 internal sealed class WindowLayoutController : IDisposable
 {
-    private const double FanControlWidthMultiplier = 0.66;
+    private const double FanControlOverlapMultiplier = 0.34;
+    private const int SteamFriendsOverlapPixels = 7;
+    private const int FanControlAndCenterBottomOverlapPixels = 7;
 
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Dictionary<string, Rectangle> _desiredPinnedBounds = new(StringComparer.OrdinalIgnoreCase);
@@ -138,7 +140,11 @@ internal sealed class WindowLayoutController : IDisposable
                 ? desiredLeft
                 : leftPinned.Bounds;
 
-            leftEdge = Math.Max(leftEdge, leftBounds.Right);
+            var overlap = Math.Min(
+                Math.Max(0, leftBounds.Width - 1),
+                Math.Max(0, (int)Math.Round(leftBounds.Width * FanControlOverlapMultiplier)));
+
+            leftEdge = Math.Max(leftEdge, leftBounds.Right - overlap);
         }
 
         var rightPinned = pinnedWindows.FirstOrDefault(p => p.Side == DockSide.Right);
@@ -148,7 +154,7 @@ internal sealed class WindowLayoutController : IDisposable
                 ? desiredRight
                 : rightPinned.Bounds;
 
-            rightEdge = Math.Min(rightEdge, rightBounds.Left);
+            rightEdge = Math.Min(rightEdge, rightBounds.Left + SteamFriendsOverlapPixels);
         }
 
         if (rightEdge <= leftEdge + 100)
@@ -158,27 +164,18 @@ internal sealed class WindowLayoutController : IDisposable
             leftEdge,
             targetScreen.WorkingArea.Top,
             rightEdge,
-            targetScreen.WorkingArea.Bottom);
+            targetScreen.WorkingArea.Bottom + FanControlAndCenterBottomOverlapPixels);
     }
 
     private static Rectangle CreateDesiredBounds(PinnedWindow pinned, Screen targetScreen)
     {
         var workingArea = targetScreen.WorkingArea;
-        var width = pinned.Side == DockSide.Left
-            ? Math.Max(1, (int)Math.Round(pinned.Bounds.Width * FanControlWidthMultiplier))
-            : pinned.Bounds.Width;
-        var height = pinned.Bounds.Height;
-        var y = pinned.Bounds.Top;
-
-        if (height < workingArea.Height)
-        {
-            var maxY = workingArea.Bottom - height;
-            y = Math.Clamp(y, workingArea.Top, maxY);
-        }
-        else
-        {
-            y = workingArea.Top;
-        }
+        var width = pinned.Bounds.Width;
+        var height = workingArea.Height;
+        var y = workingArea.Top;
+        var bottomOverlap = pinned.Side == DockSide.Left
+            ? FanControlAndCenterBottomOverlapPixels
+            : 0;
 
         return pinned.Side switch
         {
@@ -186,7 +183,7 @@ internal sealed class WindowLayoutController : IDisposable
                 workingArea.Left,
                 y,
                 width,
-                height),
+                height + bottomOverlap),
             DockSide.Right => new Rectangle(
                 workingArea.Right - width,
                 y,
