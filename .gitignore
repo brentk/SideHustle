@@ -4,6 +4,7 @@ obj/
 
 # Visual Studio / Rider / user-specific files
 .vs/
+.vscode/
 *.user
 *.userosscache
 *.suo

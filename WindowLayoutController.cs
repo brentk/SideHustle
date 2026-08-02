@@ -204,12 +204,15 @@ internal sealed class WindowLayoutController : IDisposable
     private static List<PinnedWindow> FindPinnedWindows()
     {
         var windows = new List<PinnedWindow>();
-        var primary = Screen.PrimaryScreen;
-        if (primary is null)
-            return windows;
+        var fanControlWindow = TryFindFanControlWindow();
+        if (fanControlWindow is not null)
+            windows.Add(fanControlWindow.Value);
 
         EnumWindows((hwnd, _) =>
         {
+            if (fanControlWindow is not null && hwnd == fanControlWindow.Value.Handle)
+                return true;
+
             if (!IsWindowVisible(hwnd))
                 return true;
 
@@ -241,6 +244,39 @@ internal sealed class WindowLayoutController : IDisposable
         }, IntPtr.Zero);
 
         return windows;
+    }
+
+    private static PinnedWindow? TryFindFanControlWindow()
+    {
+        foreach (var process in Process.GetProcessesByName("FanControl"))
+        {
+            try
+            {
+                var hwnd = process.MainWindowHandle;
+                if (hwnd == IntPtr.Zero || !IsWindowVisible(hwnd))
+                    continue;
+
+                if (!GetWindowRect(hwnd, out var rect))
+                    continue;
+
+                var windowRect = rect.ToRectangle();
+                if (windowRect.Width <= 0 || windowRect.Height <= 0)
+                    continue;
+
+                return new PinnedWindow(
+                    hwnd,
+                    DockSide.Left,
+                    windowRect,
+                    GetWindowTitle(hwnd),
+                    process.ProcessName);
+            }
+            catch
+            {
+                continue;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsFanControlWindow(string title, string processName, string processPath, string className)
