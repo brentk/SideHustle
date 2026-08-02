@@ -1,4 +1,4 @@
-# SideHustle
+# <img src="icon.png" alt="Left Aligned Image" width="32"> SideHustle
 
 SideHustle is a small .NET 8 WinForms tray app for one very specific desktop setup:
 
