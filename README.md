@@ -1,62 +1,49 @@
-# WindowManager
+# SideHustle
 
-`WindowManager` is a small .NET 8 WinForms tray app built for one specific desktop setup: it keeps Fan Control pinned on the left and Steam Friends pinned on the right of my leftmost monitor, while letting the active maximized window fill the space between them.
+SideHustle is a small .NET 8 WinForms tray app for one very specific desktop setup:
 
-Current behavior:
-- Fan Control is kept on the left side.
-- Steam Friends is kept on the right side.
-- A maximized focused window, when it is not one of those pinned windows, is resized into the space between them.
-- All three windows stop at the top of the taskbar.
-- The center window intentionally overlaps a few pixels into Fan Control and Steam Friends to remove visible seams and reclaim dead space.
+- Fan Control stays pinned on the left side of the leftmost monitor.
+- Steam Friends stays pinned on the right side of the same monitor.
+- A focused, maximized non-pinned window fills the space between them and stops at the taskbar.
 
-Fan Control runs elevated, so `WindowManager` must also run elevated to control it successfully.
+The app is intentionally narrow in scope. It is built around this exact monitor/window layout, not as a general-purpose window manager.
 
 ## Requirements
 
 - Windows
-- .NET 8 SDK
-- Administrator privileges when running the tray app
-
-## Run In Debug
-
-If you use VS Code:
-- Open the workspace as administrator.
-- Use the `Launch WindowManager` debug configuration.
-- That configuration launches `bin/Debug/net8.0-windows/WindowManager.exe` directly so the manifest can request elevation.
+- .NET 8 SDK for building
+- Administrator privileges to control Fan Control
 
 ## Build
 
 ```powershell
-dotnet build WindowManager.csproj
+dotnet build SideHustle.csproj
 ```
 
-## Publish Single EXE
+## Debug
 
-For a self-contained single-file build:
+Use VS Code as administrator, then launch the built EXE directly through the repo's `.vscode/launch.json` configuration.
+
+## Publish
+
+Single-file publish for x64 Windows:
 
 ```powershell
-dotnet publish .\WindowManager.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true -o .\publish
+dotnet publish .\SideHustle.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=true -o .\bin\pub
 ```
 
 If you want it to stay smaller and rely on the machine already having the right .NET runtime installed, use:
 
 ```powershell
-dotnet publish .\WindowManager.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false -o .\publish
+dotnet publish .\SideHustle.csproj -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false -o .\bin\pub
 ```
 
-Both produce a single executable under `publish\`.
+Both produce a single executable under `.\bin\pub\`.
 
-## Project Files
+## Project Layout
 
-- [`Program.cs`](Program.cs) starts the WinForms application.
-- [`TrayApplicationContext.cs`](TrayApplicationContext.cs) creates the tray icon and starts the controller.
-- [`WindowLayoutController.cs`](WindowLayoutController.cs) contains the window-matching and layout logic.
-- [`app.manifest`](app.manifest) requests administrator privileges.
-- [`.vscode/launch.json`](.vscode/launch.json) launches the elevated EXE for debugging.
-- [`.vscode/tasks.json`](.vscode/tasks.json) builds the project before debugging.
-
-## Layout Notes
-
-- The app targets the leftmost monitor in `Screen.AllScreens`.
-- Fan Control is kept at its own minimum usable width; the center window overlaps the unused right portion instead of trying to force Fan Control thinner.
-- The center window uses the taskbar-aware working area vertically, but it intentionally overlaps slightly into the side windows horizontally to avoid visible seams.
+- `Program.cs` starts WinForms and runs the tray context.
+- `TrayApplicationContext.cs` owns the tray icon and controller lifecycle.
+- `WindowLayoutController.cs` handles window matching, pinning, and center-window sizing.
+- `SideHustle.csproj` contains the app settings and manifest reference.
+- `app.manifest` requests administrator privileges.

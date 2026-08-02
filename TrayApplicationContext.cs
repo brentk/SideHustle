@@ -8,7 +8,7 @@ public class TrayApplicationContext : ApplicationContext
 
     public TrayApplicationContext()
     {
-        _enableItem = new ToolStripMenuItem("Enable")
+        _enableItem = new ToolStripMenuItem("Side Hustling")
         {
             Checked = _enabled,
             CheckOnClick = true
@@ -32,8 +32,7 @@ public class TrayApplicationContext : ApplicationContext
         _icon = new NotifyIcon
         {
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath),
-            //Icon = new Icon("app.ico"),
-            Text = "Window Manager",
+            Text = "SideHustle",
             Visible = true,
             ContextMenuStrip = menu
         };

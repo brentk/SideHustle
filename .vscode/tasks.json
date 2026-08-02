@@ -5,11 +5,7 @@
       "label": "build",
       "type": "process",
       "command": "dotnet",
-      "args": [
-        "build",
-        "${workspaceFolder}/WindowManager.csproj"
-      ],
-      "group": "build",
+      "args": ["build", "${workspaceFolder}/SideHustle.csproj"],
       "problemMatcher": "$msCompile"
     }
   ]

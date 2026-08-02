@@ -1,4 +1,4 @@
-namespace WindowManager;
+namespace SideHustle;
 
 static class Program
 {
