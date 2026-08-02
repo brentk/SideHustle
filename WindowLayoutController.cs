@@ -4,6 +4,8 @@ using System.Text;
 
 internal sealed class WindowLayoutController : IDisposable
 {
+    private const double FanControlWidthMultiplier = 0.66;
+
     private readonly System.Windows.Forms.Timer _timer;
     private readonly Dictionary<string, Rectangle> _desiredPinnedBounds = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _sync = new();
@@ -84,7 +86,7 @@ internal sealed class WindowLayoutController : IDisposable
             if (!IsWindowMaximized(foreground))
                 return;
 
-            var centerBounds = TryGetCenterBounds(targetScreen, pinnedWindows);
+            var centerBounds = TryGetCenterBounds(targetScreen, pinnedWindows, _desiredPinnedBounds);
             if (centerBounds is null)
                 return;
 
@@ -121,24 +123,39 @@ internal sealed class WindowLayoutController : IDisposable
             SetWindowPosFlags.SWP_FRAMECHANGED);
     }
 
-    private static Rectangle? TryGetCenterBounds(Screen targetScreen, IReadOnlyList<PinnedWindow> pinnedWindows)
+    private static Rectangle? TryGetCenterBounds(
+        Screen targetScreen,
+        IReadOnlyList<PinnedWindow> pinnedWindows,
+        IReadOnlyDictionary<string, Rectangle> desiredPinnedBounds)
     {
         var leftEdge = targetScreen.WorkingArea.Left;
         var rightEdge = targetScreen.WorkingArea.Right;
 
         var leftPinned = pinnedWindows.FirstOrDefault(p => p.Side == DockSide.Left);
         if (leftPinned.Handle != IntPtr.Zero)
-            leftEdge = Math.Max(leftEdge, leftPinned.Bounds.Right);
+        {
+            var leftBounds = desiredPinnedBounds.TryGetValue(DockSide.Left.ToString(), out var desiredLeft)
+                ? desiredLeft
+                : leftPinned.Bounds;
+
+            leftEdge = Math.Max(leftEdge, leftBounds.Right);
+        }
 
         var rightPinned = pinnedWindows.FirstOrDefault(p => p.Side == DockSide.Right);
         if (rightPinned.Handle != IntPtr.Zero)
-            rightEdge = Math.Min(rightEdge, rightPinned.Bounds.Left);
+        {
+            var rightBounds = desiredPinnedBounds.TryGetValue(DockSide.Right.ToString(), out var desiredRight)
+                ? desiredRight
+                : rightPinned.Bounds;
+
+            rightEdge = Math.Min(rightEdge, rightBounds.Left);
+        }
 
         if (rightEdge <= leftEdge + 100)
             return null;
 
-            return Rectangle.FromLTRB(
-                leftEdge,
+        return Rectangle.FromLTRB(
+            leftEdge,
             targetScreen.WorkingArea.Top,
             rightEdge,
             targetScreen.WorkingArea.Bottom);
@@ -147,7 +164,9 @@ internal sealed class WindowLayoutController : IDisposable
     private static Rectangle CreateDesiredBounds(PinnedWindow pinned, Screen targetScreen)
     {
         var workingArea = targetScreen.WorkingArea;
-        var width = pinned.Bounds.Width;
+        var width = pinned.Side == DockSide.Left
+            ? Math.Max(1, (int)Math.Round(pinned.Bounds.Width * FanControlWidthMultiplier))
+            : pinned.Bounds.Width;
         var height = pinned.Bounds.Height;
         var y = pinned.Bounds.Top;
 
