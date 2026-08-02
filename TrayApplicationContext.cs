@@ -48,6 +48,7 @@ public class TrayApplicationContext : ApplicationContext
 
     private void StopWork()
     {
+    
         _controller.Stop();
     }
 

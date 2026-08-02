@@ -48,8 +48,8 @@ internal sealed class WindowLayoutController : IDisposable
     {
         lock (_sync)
         {
-            var primary = Screen.PrimaryScreen;
-            if (primary is null)
+            var targetScreen = GetTargetScreen();
+            if (targetScreen is null)
                 return;
 
             var pinnedWindows = FindPinnedWindows();
@@ -60,7 +60,7 @@ internal sealed class WindowLayoutController : IDisposable
 
                 if (!_desiredPinnedBounds.TryGetValue(key, out var desired))
                 {
-                    desired = pinned.Bounds;
+                    desired = CreateDesiredBounds(pinned, targetScreen);
                     _desiredPinnedBounds[key] = desired;
                 }
 
@@ -78,13 +78,13 @@ internal sealed class WindowLayoutController : IDisposable
             if (!IsWindowVisible(foreground))
                 return;
 
-            if (!IsOnPrimaryMonitor(foreground, primary))
+            if (!IsOnTargetMonitor(foreground, targetScreen))
                 return;
 
             if (!IsWindowMaximized(foreground))
                 return;
 
-            var centerBounds = TryGetCenterBounds(primary, pinnedWindows);
+            var centerBounds = TryGetCenterBounds(targetScreen, pinnedWindows);
             if (centerBounds is null)
                 return;
 
@@ -121,10 +121,10 @@ internal sealed class WindowLayoutController : IDisposable
             SetWindowPosFlags.SWP_FRAMECHANGED);
     }
 
-    private static Rectangle? TryGetCenterBounds(Screen primary, IReadOnlyList<PinnedWindow> pinnedWindows)
+    private static Rectangle? TryGetCenterBounds(Screen targetScreen, IReadOnlyList<PinnedWindow> pinnedWindows)
     {
-        var leftEdge = primary.WorkingArea.Left;
-        var rightEdge = primary.WorkingArea.Right;
+        var leftEdge = targetScreen.WorkingArea.Left;
+        var rightEdge = targetScreen.WorkingArea.Right;
 
         var leftPinned = pinnedWindows.FirstOrDefault(p => p.Side == DockSide.Left);
         if (leftPinned.Handle != IntPtr.Zero)
@@ -137,17 +137,58 @@ internal sealed class WindowLayoutController : IDisposable
         if (rightEdge <= leftEdge + 100)
             return null;
 
-        return Rectangle.FromLTRB(
-            leftEdge,
-            primary.WorkingArea.Top,
+            return Rectangle.FromLTRB(
+                leftEdge,
+            targetScreen.WorkingArea.Top,
             rightEdge,
-            primary.WorkingArea.Bottom);
+            targetScreen.WorkingArea.Bottom);
     }
 
-    private static bool IsOnPrimaryMonitor(IntPtr hwnd, Screen primary)
+    private static Rectangle CreateDesiredBounds(PinnedWindow pinned, Screen targetScreen)
+    {
+        var workingArea = targetScreen.WorkingArea;
+        var width = pinned.Bounds.Width;
+        var height = pinned.Bounds.Height;
+        var y = pinned.Bounds.Top;
+
+        if (height < workingArea.Height)
+        {
+            var maxY = workingArea.Bottom - height;
+            y = Math.Clamp(y, workingArea.Top, maxY);
+        }
+        else
+        {
+            y = workingArea.Top;
+        }
+
+        return pinned.Side switch
+        {
+            DockSide.Left => new Rectangle(
+                workingArea.Left,
+                y,
+                width,
+                height),
+            DockSide.Right => new Rectangle(
+                workingArea.Right - width,
+                y,
+                width,
+                height),
+            _ => pinned.Bounds
+        };
+    }
+
+    private static bool IsOnTargetMonitor(IntPtr hwnd, Screen targetScreen)
     {
         var windowScreen = Screen.FromHandle(hwnd);
-        return windowScreen.Primary;
+        return windowScreen.DeviceName == targetScreen.DeviceName;
+    }
+
+    private static Screen? GetTargetScreen()
+    {
+        return Screen.AllScreens
+            .OrderBy(screen => screen.Bounds.Left)
+            .ThenBy(screen => screen.Bounds.Top)
+            .FirstOrDefault();
     }
 
     private static bool IsWindowMaximized(IntPtr hwnd)
@@ -163,6 +204,9 @@ internal sealed class WindowLayoutController : IDisposable
     private static List<PinnedWindow> FindPinnedWindows()
     {
         var windows = new List<PinnedWindow>();
+        var primary = Screen.PrimaryScreen;
+        if (primary is null)
+            return windows;
 
         EnumWindows((hwnd, _) =>
         {
@@ -178,8 +222,10 @@ internal sealed class WindowLayoutController : IDisposable
 
             var title = GetWindowTitle(hwnd);
             var processName = GetProcessName(hwnd);
+            var processPath = GetProcessPath(hwnd);
+            var className = GetWindowClass(hwnd);
 
-            if (IsFanControlWindow(title, processName))
+            if (IsFanControlWindow(title, processName, processPath, className))
             {
                 windows.Add(new PinnedWindow(hwnd, DockSide.Left, windowRect, title, processName));
                 return true;
@@ -197,10 +243,12 @@ internal sealed class WindowLayoutController : IDisposable
         return windows;
     }
 
-    private static bool IsFanControlWindow(string title, string processName)
+    private static bool IsFanControlWindow(string title, string processName, string processPath, string className)
     {
-        return title.Contains("fan control", StringComparison.OrdinalIgnoreCase) ||
-               processName.Contains("fancontrol", StringComparison.OrdinalIgnoreCase);
+        return processName.Equals("FanControl", StringComparison.OrdinalIgnoreCase) &&
+               (title.StartsWith("Fan Control", StringComparison.OrdinalIgnoreCase) ||
+                className.StartsWith("HwndWrapper[FanControl", StringComparison.OrdinalIgnoreCase) ||
+                processPath.Contains("FanControl.exe", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsSteamFriendsWindow(string title, string processName)
@@ -238,6 +286,29 @@ internal sealed class WindowLayoutController : IDisposable
         }
     }
 
+    private static string GetProcessPath(IntPtr hwnd)
+    {
+        _ = GetWindowThreadProcessId(hwnd, out var processId);
+        if (processId == 0)
+            return string.Empty;
+
+        try
+        {
+            return Process.GetProcessById((int)processId).MainModule?.FileName ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string GetWindowClass(IntPtr hwnd)
+    {
+        var builder = new StringBuilder(256);
+        _ = GetClassName(hwnd, builder, builder.Capacity);
+        return builder.ToString();
+    }
+
     private readonly record struct PinnedWindow(IntPtr Handle, DockSide Side, Rectangle Bounds, string Title, string ProcessName);
 
     private enum DockSide
@@ -263,6 +334,9 @@ internal sealed class WindowLayoutController : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
